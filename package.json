@@ -1,0 +1,60 @@
+{
+  "name": "@gameowermedia/overplayer",
+  "version": "1.0.0",
+  "description": "A sleek, persistent audio player component for React. Features shuffle, repeat, volume control, session persistence, minimizable UI, and autoplay unlock.",
+  "main": "dist/index.js",
+  "module": "dist/index.mjs",
+  "types": "dist/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./dist/index.mjs",
+      "require": "./dist/index.js",
+      "types": "./dist/index.d.ts"
+    },
+    "./styles.css": "./dist/styles.css"
+  },
+  "files": [
+    "dist",
+    "README.md",
+    "LICENSE"
+  ],
+  "scripts": {
+    "build": "tsup",
+    "dev": "tsup --watch",
+    "lint": "eslint src/",
+    "typecheck": "tsc --noEmit",
+    "prepublishOnly": "npm run build"
+  },
+  "keywords": [
+    "react",
+    "audio",
+    "player",
+    "music",
+    "component",
+    "persistent",
+    "shuffle",
+    "typescript"
+  ],
+  "author": "GameOwerMedia",
+  "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/GameOwerMedia/OverPlayer.git"
+  },
+  "bugs": {
+    "url": "https://github.com/GameOwerMedia/OverPlayer/issues"
+  },
+  "homepage": "https://github.com/GameOwerMedia/OverPlayer#readme",
+  "peerDependencies": {
+    "react": ">=18.0.0",
+    "react-dom": ">=18.0.0"
+  },
+  "devDependencies": {
+    "@types/react": "^19.0.0",
+    "@types/react-dom": "^19.0.0",
+    "react": "^19.0.0",
+    "react-dom": "^19.0.0",
+    "tsup": "^8.0.0",
+    "typescript": "^5.0.0"
+  }
+}
