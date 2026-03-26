@@ -39,12 +39,12 @@
   "license": "MIT",
   "repository": {
     "type": "git",
-    "url": "git+https://github.com/GameOwerMedia/OverPlayer.git"
+    "url": "git+https://github.com/GameOwerMedia/OpenWebRadio.git"
   },
   "bugs": {
-    "url": "https://github.com/GameOwerMedia/OverPlayer/issues"
+    "url": "https://github.com/GameOwerMedia/OpenWebRadio/issues"
   },
-  "homepage": "https://github.com/GameOwerMedia/OverPlayer#readme",
+  "homepage": "https://github.com/GameOwerMedia/OpenWebRadio#readme",
   "peerDependencies": {
     "react": ">=18.0.0",
     "react-dom": ">=18.0.0"

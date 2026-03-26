@@ -2,7 +2,7 @@
 
 A sleek, persistent audio player component for React. Fixed bottom bar with dark & light themes, playlist drawer, progress seek, keyboard shortcuts, shuffle, repeat, volume control, session persistence, and autoplay unlock.
 
-**[Live Demo](https://gameowermedia.github.io/OverPlayer/)** | **[npm](https://www.npmjs.com/package/@gameowermedia/overplayer)**
+**[Live Demo](https://gameowermedia.github.io/OpenWebRadio/)** | **[npm](https://www.npmjs.com/package/@gameowermedia/overplayer)**
 
 Created by **[OverJK](https://github.com/GameOwerMedia)**
 
@@ -306,8 +306,8 @@ export default function RootLayout({ children }) {
 ## Development
 
 ```bash
-git clone https://github.com/GameOwerMedia/OverPlayer.git
-cd OverPlayer
+git clone https://github.com/GameOwerMedia/OpenWebRadio.git
+cd OpenWebRadio
 npm install
 npm run dev        # watch mode
 npm run build      # production build

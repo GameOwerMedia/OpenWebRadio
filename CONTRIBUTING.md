@@ -5,8 +5,8 @@ Thanks for your interest in contributing! Here's how to get started.
 ## Development Setup
 
 ```bash
-git clone https://github.com/GameOwerMedia/OverPlayer.git
-cd OverPlayer
+git clone https://github.com/GameOwerMedia/OpenWebRadio.git
+cd OpenWebRadio
 npm install
 npm run dev      # watch mode — rebuilds on file changes
 ```
@@ -51,7 +51,7 @@ docs/
 
 ## Reporting Issues
 
-Open an issue at [github.com/GameOwerMedia/OverPlayer/issues](https://github.com/GameOwerMedia/OverPlayer/issues) with:
+Open an issue at [github.com/GameOwerMedia/OpenWebRadio/issues](https://github.com/GameOwerMedia/OpenWebRadio/issues) with:
 
 - What you expected vs what happened
 - Browser and React version
