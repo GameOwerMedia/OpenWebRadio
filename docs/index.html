@@ -157,19 +157,18 @@
       letter-spacing: -0.01em;
     }
 
-    /* Controls panel */
+    /* Controls panel — single card with grid inside */
     .controls-panel {
-      display: grid;
-      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-      gap: 12px;
-    }
-    .control-card {
       background: var(--card-bg);
       border: 1px solid var(--card-border);
       border-radius: 10px;
-      padding: 16px;
+      padding: 20px;
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
+      gap: 16px;
     }
-    .control-card label {
+    .control-item {}
+    .control-item label {
       display: block;
       font-size: 11px;
       text-transform: uppercase;
@@ -177,7 +176,7 @@
       color: var(--fg-dim);
       margin-bottom: 8px;
     }
-    .control-card select, .control-card input[type="color"] {
+    .control-item select, .control-item input[type="color"] {
       width: 100%;
       padding: 6px 10px;
       border-radius: 6px;
@@ -186,7 +185,7 @@
       color: var(--fg);
       font-size: 14px;
     }
-    .control-card input[type="color"] {
+    .control-item input[type="color"] {
       height: 36px;
       padding: 2px;
       cursor: pointer;
@@ -634,7 +633,7 @@ function App() {
         <div className="section">
           <h2>Customize</h2>
           <div className="controls-panel">
-            <div className="control-card">
+            <div className="control-item">
               <label>Theme</label>
               <select value={theme} onChange={e => setTheme(e.target.value)}>
                 <option value="dark">Dark</option>
@@ -642,15 +641,15 @@ function App() {
                 <option value="auto">Auto (OS)</option>
               </select>
             </div>
-            <div className="control-card">
+            <div className="control-item">
               <label>Accent Color</label>
               <input type="color" value={accent} onChange={e => setAccent(e.target.value)} />
             </div>
-            <div className="control-card">
+            <div className="control-item">
               <label>Accent Alt</label>
               <input type="color" value={accentAlt} onChange={e => setAccentAlt(e.target.value)} />
             </div>
-            <div className="control-card">
+            <div className="control-item">
               <label>Brand Label</label>
               <select value={label} onChange={e => setLabel(e.target.value)}>
                 <option value="OpenWebRadio">OpenWebRadio</option>
@@ -664,8 +663,10 @@ function App() {
                 <option value="StreamFM">StreamFM</option>
                 <option value="">None</option>
               </select>
-              <label style={{marginTop:12}}>Subtitle</label>
-              <input type="text" value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="e.g. Live from NYC" style={{width:"100%",padding:"6px 10px",borderRadius:6,border:"1px solid var(--card-border)",background:"var(--bg)",color:"var(--fg)",fontSize:14}} />
+            </div>
+            <div className="control-item" style={{gridColumn:"1 / -1"}}>
+              <label>Subtitle</label>
+              <input type="text" value={subtitle} onChange={e => setSubtitle(e.target.value)} placeholder="Shown next to track title — e.g. Live from NYC" style={{width:"100%",padding:"6px 10px",borderRadius:6,border:"1px solid var(--card-border)",background:"var(--bg)",color:"var(--fg)",fontSize:14}} />
             </div>
           </div>
         </div>
