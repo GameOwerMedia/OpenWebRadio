@@ -1,6 +1,23 @@
 # Changelog
 
-All notable changes to OverPlayer will be documented in this file.
+All notable changes to OpenWebRadio will be documented in this file.
+
+## [1.2.0] - 2026-03-26
+
+### Added
+- **Live stream support** — plays Icecast/Shoutcast internet radio streams directly
+- **Auto-detection** — detects live streams from infinite audio duration, or use `live: true` on tracks
+- **LIVE badge** — pulsing red badge replaces elapsed time for live streams
+- **LIVE indicators** — badges in playlist drawer and minimized mode
+- **Demo live stations** — SomaFM Groove Salad and DEF CON Radio included in demo
+- **Brand label presets** — OpenWebRadio, OpenWebPlayer, OpenPlayer, GlitchPlayer, GlitchFM, WebFM, and more
+
+### Changed
+- Repository renamed from OverPlayer to **OpenWebRadio**
+- Default brand label changed to "OpenWebRadio"
+- Progress bar and seek hidden for live streams
+- Arrow key seek disabled for live streams
+- Demo page hero title updated to OpenWebRadio
 
 ## [1.1.0] - 2026-03-26
 

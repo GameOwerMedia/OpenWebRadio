@@ -1,6 +1,6 @@
-# OverPlayer
+# OpenWebRadio
 
-A sleek, persistent audio player component for React. Fixed bottom bar with dark & light themes, playlist drawer, progress seek, keyboard shortcuts, shuffle, repeat, volume control, session persistence, and autoplay unlock.
+A persistent React audio player with live stream support. Plays internet radio (Icecast/Shoutcast), local files, and podcasts. Dark & light themes, playlist drawer, progress seek, keyboard shortcuts, shuffle, repeat, volume control, session persistence, and autoplay unlock.
 
 **[Live Demo](https://gameowermedia.github.io/OpenWebRadio/)** | **[npm](https://www.npmjs.com/package/@gameowermedia/overplayer)**
 
@@ -223,6 +223,7 @@ function CustomPlayer() {
 | `muted` | `boolean` | Is muted |
 | `shuffleOn` | `boolean` | Is shuffle enabled |
 | `repeatOne` | `boolean` | Is repeat one enabled |
+| `isLive` | `boolean` | Is current track a live stream |
 
 ---
 
@@ -316,6 +317,7 @@ export default function RootLayout({ children }) {
 - **Progress bar** — uses `timeupdate` events for real-time progress, click-to-seek on the bar
 - **Playlist drawer** — animated slide-up panel with track list and playing indicator
 - **Keyboard shortcuts** — global `keydown` listener, ignored when focus is in inputs/textareas
+- **Live stream detection** — auto-detects infinite duration streams, hides seek bar, shows pulsing LIVE badge
 
 ---
 
