@@ -20,7 +20,7 @@ export interface OverPlayerProps {
   shuffle?: boolean;
   /** Whether to autoplay on load (default: true, subject to browser restrictions) */
   autoplay?: boolean;
-  /** Initial volume from 0 to 1 (default: 0.3) */
+  /** Initial volume from 0 to 1 (default: 0.3). A volume saved in this tab overrides it after mount. */
   volume?: number;
   /** Unique key for session persistence — use different keys if you have multiple players (default: "overplayer") */
   storageKey?: string;

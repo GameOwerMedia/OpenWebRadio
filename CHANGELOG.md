@@ -2,6 +2,20 @@
 
 All notable changes to OpenWebRadio will be documented in this file.
 
+## [Unreleased]
+
+### Fixed
+- Server rendering no longer throws `Audio is not defined`. The audio element is created after mount, and the build keeps the `"use client"` directive.
+- Volume, mute, and the unmute level are saved in `sessionStorage` and restored with the rest of the playback session.
+- A not-yet-loaded duration (`NaN`) is no longer treated as a live stream, so a restored playback position is not wiped before metadata arrives.
+- `package.json` no longer exports `./styles.css`. Styles stay inline.
+- The package description and keywords no longer claim podcast or HLS support.
+- The `types` export condition is visible to TypeScript.
+
+### Added
+- `prepare` builds `dist/`, so `npm install github:GameOwerMedia/OpenWebRadio` installs a built package.
+- CI runs the test suite, and a push of a `v*` tag triggers the publish workflow.
+
 ## [1.2.0] - 2026-03-26
 
 ### Added
