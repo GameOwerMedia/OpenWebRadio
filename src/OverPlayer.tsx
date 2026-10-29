@@ -2,17 +2,17 @@
 
 import { useState, useRef, useEffect, useCallback } from "react";
 import type { OverPlayerProps, Track } from "./types";
+import {
+  clampVolume,
+  detectLive,
+  loadPlayback,
+  orderTracks,
+  persistedTime,
+  savePlayback,
+  volumeFromSaved,
+} from "./persist";
 
 /* ═══ Utilities ═══ */
-
-function shuffleArray<T>(arr: T[]): T[] {
-  const a = [...arr];
-  for (let i = a.length - 1; i > 0; i--) {
-    const j = Math.floor(Math.random() * (i + 1));
-    [a[i], a[j]] = [a[j], a[i]];
-  }
-  return a;
-}
 
 function formatTime(s: number): string {
   if (!isFinite(s) || s < 0) return "0:00";
@@ -77,17 +77,31 @@ const themes: Record<"dark" | "light", ThemePalette> = {
 
 /* ═══ Global audio state — survives React remounts ═══ */
 
-const instances = new Map<
-  string,
-  {
-    audio: HTMLAudioElement;
-    tracks: Track[];
-    trackIndex: number;
-    playing: boolean;
-    hasInteracted: boolean;
-    saveInterval: ReturnType<typeof setInterval> | null;
-  }
->();
+interface PlayerInstance {
+  audio: HTMLAudioElement;
+  tracks: Track[];
+  trackIndex: number;
+  playing: boolean;
+  hasInteracted: boolean;
+  saveInterval: ReturnType<typeof setInterval> | null;
+  volume: number;
+  muted: boolean;
+  prevVolume: number;
+}
+
+const instances = new Map<string, PlayerInstance>();
+
+function writeInstanceState(key: string, instance: PlayerInstance) {
+  const track = instance.tracks[instance.trackIndex];
+  savePlayback(key, {
+    src: track?.src || "",
+    time: persistedTime(track?.live, instance.audio.duration, instance.audio.currentTime || 0),
+    wasPlaying: instance.playing,
+    volume: instance.volume,
+    muted: instance.muted,
+    prevVolume: instance.prevVolume,
+  });
+}
 
 function getOrCreateInstance(
   key: string,
@@ -95,70 +109,48 @@ function getOrCreateInstance(
   initialVolume: number,
   shouldShuffle: boolean,
   autoplay: boolean
-) {
-  if (instances.has(key)) return instances.get(key)!;
+): PlayerInstance {
+  const existing = instances.get(key);
+  if (existing) return existing;
 
-  let orderedTracks: Track[];
+  if (typeof Audio === "undefined") {
+    throw new Error("OpenWebRadio can only start playback in the browser");
+  }
+  if (tracks.length === 0) {
+    throw new Error("OpenWebRadio needs at least one track");
+  }
+
+  const orderedTracks = orderTracks(key, tracks, shouldShuffle);
+  const saved = loadPlayback(key);
+  const restoredVolume = volumeFromSaved(saved, initialVolume);
   let restoredTime = 0;
   let restoredIndex = 0;
   let shouldPlay = autoplay;
 
-  if (typeof window !== "undefined") {
-    try {
-      const savedOrder = sessionStorage.getItem(`${key}-order`);
-      if (savedOrder) {
-        const order: string[] = JSON.parse(savedOrder);
-        const restored = order
-          .map((src) => tracks.find((t) => t.src === src))
-          .filter(Boolean) as Track[];
-        orderedTracks =
-          restored.length === tracks.length
-            ? restored
-            : shouldShuffle
-              ? shuffleArray(tracks)
-              : [...tracks];
-      } else {
-        orderedTracks = shouldShuffle ? shuffleArray(tracks) : [...tracks];
-      }
-    } catch {
-      orderedTracks = shouldShuffle ? shuffleArray(tracks) : [...tracks];
+  if (saved?.src) {
+    const foundIdx = orderedTracks.findIndex((track) => track.src === saved.src);
+    if (foundIdx >= 0) {
+      restoredIndex = foundIdx;
+      restoredTime = saved.time || 0;
+      if (typeof saved.wasPlaying === "boolean") shouldPlay = saved.wasPlaying;
     }
-
-    try {
-      const saved = sessionStorage.getItem(key);
-      if (saved) {
-        const { src, time, wasPlaying } = JSON.parse(saved);
-        const foundIdx = orderedTracks.findIndex((t) => t.src === src);
-        if (foundIdx >= 0) {
-          restoredIndex = foundIdx;
-          restoredTime = time || 0;
-          shouldPlay = wasPlaying;
-        }
-      }
-    } catch {}
-
-    try {
-      sessionStorage.setItem(
-        `${key}-order`,
-        JSON.stringify(orderedTracks.map((t) => t.src))
-      );
-    } catch {}
-  } else {
-    orderedTracks = shouldShuffle ? shuffleArray(tracks) : [...tracks];
   }
 
   const audio = new Audio(orderedTracks[restoredIndex].src);
-  audio.volume = initialVolume;
+  audio.volume = restoredVolume.muted ? 0 : restoredVolume.volume;
   audio.preload = "auto";
   if (restoredTime > 0) audio.currentTime = restoredTime;
 
-  const instance = {
+  const instance: PlayerInstance = {
     audio,
     tracks: orderedTracks,
     trackIndex: restoredIndex,
     playing: false,
     hasInteracted: false,
-    saveInterval: null as ReturnType<typeof setInterval> | null,
+    saveInterval: null,
+    volume: restoredVolume.volume,
+    muted: restoredVolume.muted,
+    prevVolume: restoredVolume.prevVolume,
   };
 
   if (shouldPlay) {
@@ -187,31 +179,29 @@ function getOrCreateInstance(
               })
               .catch(() => {});
           }
-          events.forEach((e) => document.removeEventListener(e, unlock));
+          events.forEach((eventName) => document.removeEventListener(eventName, unlock));
         };
-        events.forEach((e) =>
-          document.addEventListener(e, unlock, { once: true, passive: true })
+        events.forEach((eventName) =>
+          document.addEventListener(eventName, unlock, { once: true, passive: true })
         );
       });
   }
 
   instance.saveInterval = setInterval(() => {
-    try {
-      const track = instance.tracks[instance.trackIndex];
-      const isLiveTrack = track?.live === true || !isFinite(instance.audio.duration);
-      sessionStorage.setItem(
-        key,
-        JSON.stringify({
-          src: track?.src || "",
-          time: isLiveTrack ? 0 : (instance.audio.currentTime || 0),
-          wasPlaying: instance.playing,
-        })
-      );
-    } catch {}
+    writeInstanceState(key, instance);
   }, 500);
 
   instances.set(key, instance);
   return instance;
+}
+
+/** Drops cached audio elements so tests can simulate a fresh page load. */
+export function clearInstancesForTests(): void {
+  for (const instance of instances.values()) {
+    if (instance.saveInterval) clearInterval(instance.saveInterval);
+    instance.audio.pause();
+  }
+  instances.clear();
 }
 
 /* ═══ SVG Icons ═══ */
@@ -372,17 +362,15 @@ function injectStyles() {
 /* ═══ Auto theme hook ═══ */
 
 function useResolvedTheme(theme: "dark" | "light" | "auto"): "dark" | "light" {
-  const [resolved, setResolved] = useState<"dark" | "light">(() => {
-    if (theme !== "auto") return theme;
-    if (typeof window === "undefined") return "dark";
-    return window.matchMedia("(prefers-color-scheme: light)").matches ? "light" : "dark";
-  });
+  // The same initial value on the server and the client. `auto` follows the OS after mount.
+  const [resolved, setResolved] = useState<"dark" | "light">(theme === "light" ? "light" : "dark");
 
   useEffect(() => {
     if (theme !== "auto") {
       setResolved(theme);
       return;
     }
+    if (typeof window === "undefined" || typeof window.matchMedia !== "function") return;
     const mq = window.matchMedia("(prefers-color-scheme: light)");
     const handler = (e: MediaQueryListEvent) => setResolved(e.matches ? "light" : "dark");
     setResolved(mq.matches ? "light" : "dark");
@@ -414,61 +402,61 @@ export function OverPlayer({
   onPause,
   onEnd,
 }: OverPlayerProps) {
-  const instance = getOrCreateInstance(
-    storageKey,
-    tracks,
-    initialVolume,
-    initialShuffle,
-    autoplay
-  );
-
   const resolvedTheme = useResolvedTheme(theme);
   const palette = themes[resolvedTheme];
   const callbacksRef = useRef({ onTrackChange, onPlay, onPause, onEnd });
   callbacksRef.current = { onTrackChange, onPlay, onPause, onEnd };
+  const instanceRef = useRef<PlayerInstance | null>(null);
+  const trackSignature = tracks
+    .map((track) => `${track.src}\0${track.live === true ? "1" : track.live === false ? "0" : ""}`)
+    .join("\n");
 
-  const [playing, setPlaying] = useState(instance.playing);
-  const [hasInteracted, setHasInteracted] = useState(instance.hasInteracted);
-  const [trackIndex, setTrackIndex] = useState(instance.trackIndex);
+  const [playing, setPlaying] = useState(false);
+  const [hasInteracted, setHasInteracted] = useState(false);
+  const [trackIndex, setTrackIndex] = useState(0);
+  const [orderedTracks, setOrderedTracks] = useState(tracks);
   const [shuffleOn, setShuffleOn] = useState(initialShuffle);
   const [repeatOne, setRepeatOne] = useState(false);
   const [minimized, setMinimized] = useState(false);
-  const [volume, setVolume] = useState(initialVolume);
+  const [volume, setVolume] = useState(() => clampVolume(initialVolume));
   const [muted, setMuted] = useState(false);
   const [currentTime, setCurrentTime] = useState(0);
   const [duration, setDuration] = useState(0);
   const [showPlaylist, setShowPlaylist] = useState(false);
-  const [isLive, setIsLive] = useState(false);
-  const prevVolumeRef = useRef(initialVolume);
+  const [isLive, setIsLive] = useState(() => tracks[0]?.live === true);
+  const [boundAudio, setBoundAudio] = useState<HTMLAudioElement | null>(null);
   const progressRef = useRef<HTMLDivElement>(null);
 
+  // Audio is created after mount so server rendering never evaluates `new Audio()`.
   useEffect(() => {
     injectStyles();
-  }, []);
+    if (tracks.length === 0 || typeof Audio === "undefined") return;
 
-  // Sync state from global instance
-  useEffect(() => {
+    const instance = getOrCreateInstance(
+      storageKey,
+      tracks,
+      clampVolume(initialVolume),
+      initialShuffle,
+      autoplay
+    );
+    instanceRef.current = instance;
+    setOrderedTracks(instance.tracks);
+    setTrackIndex(instance.trackIndex);
     setPlaying(instance.playing);
     setHasInteracted(instance.hasInteracted);
-    setTrackIndex(instance.trackIndex);
+    setVolume(instance.volume);
+    setMuted(instance.muted);
+    setCurrentTime(instance.audio.currentTime || 0);
+    setDuration(Number.isFinite(instance.audio.duration) ? instance.audio.duration : 0);
+    setBoundAudio(instance.audio);
 
-    const syncId = setInterval(() => {
-      if (instance.playing !== playing) setPlaying(instance.playing);
-      if (instance.hasInteracted !== hasInteracted) setHasInteracted(instance.hasInteracted);
-    }, 300);
+    const track = instance.tracks[instance.trackIndex];
+    setIsLive(detectLive(track?.live, instance.audio.duration));
 
-    return () => clearInterval(syncId);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
-
-  // Track time updates
-  useEffect(() => {
     const audio = instance.audio;
     const checkLive = () => {
-      const track = instance.tracks[instance.trackIndex];
-      if (track?.live === true) { setIsLive(true); return; }
-      if (track?.live === false) { setIsLive(false); return; }
-      setIsLive(!isFinite(audio.duration));
+      const current = instance.tracks[instance.trackIndex];
+      setIsLive(detectLive(current?.live, audio.duration));
     };
     const onTimeUpdate = () => {
       setCurrentTime(audio.currentTime);
@@ -478,14 +466,26 @@ export function OverPlayer({
     const onLoadedMeta = () => { setDuration(audio.duration || 0); checkLive(); };
     audio.addEventListener("timeupdate", onTimeUpdate);
     audio.addEventListener("loadedmetadata", onLoadedMeta);
+
+    const syncId = setInterval(() => {
+      setPlaying(instance.playing);
+      setHasInteracted(instance.hasInteracted);
+    }, 300);
+
     return () => {
       audio.removeEventListener("timeupdate", onTimeUpdate);
       audio.removeEventListener("loadedmetadata", onLoadedMeta);
+      clearInterval(syncId);
+      setBoundAudio((current) => (current === audio ? null : current));
     };
-  }, [instance.audio]);
+    // The shared audio element is keyed by storageKey and reused across remounts.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [storageKey, trackSignature]);
 
   // Handle track end
   useEffect(() => {
+    const instance = instanceRef.current;
+    if (!instance || !boundAudio || instance.audio !== boundAudio) return;
     const audio = instance.audio;
 
     const onEnded = () => {
@@ -495,6 +495,7 @@ export function OverPlayer({
         audio.play().catch(() => {});
         return;
       }
+      if (instance.tracks.length === 0) return;
       let nextIndex: number;
       if (shuffleOn) {
         nextIndex = Math.floor(Math.random() * instance.tracks.length);
@@ -507,19 +508,152 @@ export function OverPlayer({
       setTrackIndex(nextIndex);
       audio.src = instance.tracks[nextIndex].src;
       audio.play().catch(() => {});
+      writeInstanceState(storageKey, instance);
       callbacksRef.current.onTrackChange?.(instance.tracks[nextIndex], nextIndex);
     };
 
     audio.addEventListener("ended", onEnded);
     return () => audio.removeEventListener("ended", onEnded);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [trackIndex, repeatOne, shuffleOn]);
+  }, [boundAudio, trackIndex, repeatOne, shuffleOn, storageKey]);
+
+  const toggle = useCallback(() => {
+    const instance = instanceRef.current;
+    if (!instance) return;
+    const audio = instance.audio;
+    if (playing) {
+      audio.pause();
+      instance.playing = false;
+      setPlaying(false);
+      writeInstanceState(storageKey, instance);
+      callbacksRef.current.onPause?.();
+    } else {
+      audio
+        .play()
+        .then(() => {
+          instance.playing = true;
+          instance.hasInteracted = true;
+          setPlaying(true);
+          setHasInteracted(true);
+          writeInstanceState(storageKey, instance);
+          callbacksRef.current.onPlay?.();
+        })
+        .catch(() => {});
+    }
+  }, [playing, storageKey]);
+
+  const nextTrack = useCallback(() => {
+    const instance = instanceRef.current;
+    if (!instance || instance.tracks.length === 0) return;
+    const audio = instance.audio;
+    const nextIdx = (trackIndex + 1) % instance.tracks.length;
+    instance.trackIndex = nextIdx;
+    setTrackIndex(nextIdx);
+    audio.src = instance.tracks[nextIdx].src;
+    if (playing) audio.play().catch(() => {});
+    writeInstanceState(storageKey, instance);
+    callbacksRef.current.onTrackChange?.(instance.tracks[nextIdx], nextIdx);
+  }, [trackIndex, playing, storageKey]);
+
+  const prevTrack = useCallback(() => {
+    const instance = instanceRef.current;
+    if (!instance || instance.tracks.length === 0) return;
+    const audio = instance.audio;
+    const prevIdx = (trackIndex - 1 + instance.tracks.length) % instance.tracks.length;
+    instance.trackIndex = prevIdx;
+    setTrackIndex(prevIdx);
+    audio.src = instance.tracks[prevIdx].src;
+    if (playing) audio.play().catch(() => {});
+    writeInstanceState(storageKey, instance);
+    callbacksRef.current.onTrackChange?.(instance.tracks[prevIdx], prevIdx);
+  }, [trackIndex, playing, storageKey]);
+
+  const jumpTo = useCallback(
+    (index: number) => {
+      const instance = instanceRef.current;
+      if (!instance || index < 0 || index >= instance.tracks.length) return;
+      const audio = instance.audio;
+      instance.trackIndex = index;
+      setTrackIndex(index);
+      audio.src = instance.tracks[index].src;
+      audio.play().then(() => {
+        instance.playing = true;
+        instance.hasInteracted = true;
+        setPlaying(true);
+        setHasInteracted(true);
+        writeInstanceState(storageKey, instance);
+      }).catch(() => {});
+      setShowPlaylist(false);
+      callbacksRef.current.onTrackChange?.(instance.tracks[index], index);
+    },
+    [storageKey]
+  );
+
+  const changeVolume = useCallback(
+    (val: number) => {
+      const instance = instanceRef.current;
+      if (!instance) return;
+      const clamped = clampVolume(val, 0);
+      instance.volume = clamped;
+      instance.muted = clamped === 0;
+      if (clamped > 0) instance.prevVolume = clamped;
+      instance.audio.volume = clamped;
+      setVolume(clamped);
+      setMuted(clamped === 0);
+      writeInstanceState(storageKey, instance);
+    },
+    [storageKey]
+  );
+
+  const toggleMute = useCallback(() => {
+    const instance = instanceRef.current;
+    if (!instance) return;
+    if (instance.muted) {
+      const restored = instance.prevVolume || 0.3;
+      instance.volume = restored;
+      instance.muted = false;
+      instance.audio.volume = restored;
+      setVolume(restored);
+      setMuted(false);
+    } else {
+      instance.prevVolume = instance.volume || 0.3;
+      instance.volume = 0;
+      instance.muted = true;
+      instance.audio.volume = 0;
+      setVolume(0);
+      setMuted(true);
+    }
+    writeInstanceState(storageKey, instance);
+  }, [storageKey]);
+
+  const handleSeek = useCallback(
+    (e: React.MouseEvent<HTMLDivElement>) => {
+      const instance = instanceRef.current;
+      const bar = progressRef.current;
+      if (!instance || !bar || !duration) return;
+      const rect = bar.getBoundingClientRect();
+      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
+      instance.audio.currentTime = ratio * duration;
+    },
+    [duration]
+  );
+
+  const handleSliderKey = useCallback(
+    (e: React.KeyboardEvent) => {
+      const instance = instanceRef.current;
+      if (!instance || !duration) return;
+      if (e.key === "ArrowRight") { e.preventDefault(); instance.audio.currentTime = Math.min(instance.audio.currentTime + 5, duration); }
+      else if (e.key === "ArrowLeft") { e.preventDefault(); instance.audio.currentTime = Math.max(instance.audio.currentTime - 5, 0); }
+    },
+    [duration]
+  );
 
   // Keyboard shortcuts
   useEffect(() => {
     if (!keyboardShortcuts) return;
 
     const handler = (e: KeyboardEvent) => {
+      const instance = instanceRef.current;
+      if (!instance) return;
       const tag = (e.target as HTMLElement)?.tagName;
       if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return;
 
@@ -559,119 +693,16 @@ export function OverPlayer({
           toggleMute();
           break;
         case "KeyL":
-          setShowPlaylist((s) => !s);
+          setShowPlaylist((open) => !open);
           break;
       }
     };
 
     document.addEventListener("keydown", handler);
     return () => document.removeEventListener("keydown", handler);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [keyboardShortcuts, playing, trackIndex, muted, volume, isLive]);
+  }, [keyboardShortcuts, playing, trackIndex, muted, volume, isLive, toggle, nextTrack, prevTrack, changeVolume, toggleMute]);
 
-  const toggle = useCallback(() => {
-    const audio = instance.audio;
-    if (playing) {
-      audio.pause();
-      instance.playing = false;
-      setPlaying(false);
-      callbacksRef.current.onPause?.();
-    } else {
-      audio
-        .play()
-        .then(() => {
-          instance.playing = true;
-          instance.hasInteracted = true;
-          setPlaying(true);
-          setHasInteracted(true);
-          callbacksRef.current.onPlay?.();
-        })
-        .catch(() => {});
-    }
-  }, [playing, instance]);
-
-  const nextTrack = useCallback(() => {
-    const audio = instance.audio;
-    const nextIdx = (trackIndex + 1) % instance.tracks.length;
-    instance.trackIndex = nextIdx;
-    setTrackIndex(nextIdx);
-    audio.src = instance.tracks[nextIdx].src;
-    if (playing) audio.play().catch(() => {});
-    callbacksRef.current.onTrackChange?.(instance.tracks[nextIdx], nextIdx);
-  }, [trackIndex, playing, instance]);
-
-  const prevTrack = useCallback(() => {
-    const audio = instance.audio;
-    const prevIdx = (trackIndex - 1 + instance.tracks.length) % instance.tracks.length;
-    instance.trackIndex = prevIdx;
-    setTrackIndex(prevIdx);
-    audio.src = instance.tracks[prevIdx].src;
-    if (playing) audio.play().catch(() => {});
-    callbacksRef.current.onTrackChange?.(instance.tracks[prevIdx], prevIdx);
-  }, [trackIndex, playing, instance]);
-
-  const jumpTo = useCallback(
-    (index: number) => {
-      const audio = instance.audio;
-      instance.trackIndex = index;
-      setTrackIndex(index);
-      audio.src = instance.tracks[index].src;
-      audio.play().then(() => {
-        instance.playing = true;
-        instance.hasInteracted = true;
-        setPlaying(true);
-        setHasInteracted(true);
-      }).catch(() => {});
-      setShowPlaylist(false);
-      callbacksRef.current.onTrackChange?.(instance.tracks[index], index);
-    },
-    [instance]
-  );
-
-  const changeVolume = useCallback(
-    (val: number) => {
-      instance.audio.volume = val;
-      setVolume(val);
-      setMuted(val === 0);
-    },
-    [instance]
-  );
-
-  const toggleMute = useCallback(() => {
-    if (muted) {
-      const restored = prevVolumeRef.current || 0.3;
-      instance.audio.volume = restored;
-      setVolume(restored);
-      setMuted(false);
-    } else {
-      prevVolumeRef.current = volume;
-      instance.audio.volume = 0;
-      setVolume(0);
-      setMuted(true);
-    }
-  }, [muted, volume, instance]);
-
-  const handleSeek = useCallback(
-    (e: React.MouseEvent<HTMLDivElement>) => {
-      const bar = progressRef.current;
-      if (!bar || !duration) return;
-      const rect = bar.getBoundingClientRect();
-      const ratio = Math.max(0, Math.min(1, (e.clientX - rect.left) / rect.width));
-      instance.audio.currentTime = ratio * duration;
-    },
-    [duration, instance]
-  );
-
-  const handleSliderKey = useCallback(
-    (e: React.KeyboardEvent) => {
-      if (!duration) return;
-      if (e.key === "ArrowRight") { e.preventDefault(); instance.audio.currentTime = Math.min(instance.audio.currentTime + 5, duration); }
-      else if (e.key === "ArrowLeft") { e.preventDefault(); instance.audio.currentTime = Math.max(instance.audio.currentTime - 5, 0); }
-    },
-    [duration, instance]
-  );
-
-  const currentTrack = instance.tracks[trackIndex];
+  const currentTrack = orderedTracks[trackIndex] ?? orderedTracks[0];
   const progress = duration > 0 ? (currentTime / duration) * 100 : 0;
 
   /* ─── Minimized mode ─── */
@@ -745,13 +776,13 @@ export function OverPlayer({
           <div style={{ margin: "0 auto", maxWidth: 1400, padding: "8px 12px" }}>
             <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
               <span style={{ fontSize: 11, letterSpacing: "0.1em", textTransform: "uppercase" as const, color: palette.fgDim, fontWeight: 600 }}>
-                Playlist ({instance.tracks.length})
+                Playlist ({orderedTracks.length})
               </span>
               <span style={{ fontSize: 10, color: palette.fgDim }}>
                 Press L to toggle
               </span>
             </div>
-            {instance.tracks.map((track, i) => (
+            {orderedTracks.map((track, i) => (
               <button
                 key={`${track.src}-${i}`}
                 onClick={() => jumpTo(i)}

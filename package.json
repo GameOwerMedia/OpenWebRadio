@@ -1,17 +1,21 @@
 {
   "name": "@gameowermedia/overplayer",
   "version": "1.2.0",
-  "description": "Drop-in React audio player with live radio support. Plays local files, Icecast/Shoutcast streams, and podcasts. Persistent playback, dark/light themes, playlist drawer, keyboard shortcuts, zero dependencies.",
+  "description": "React component for music and internet radio. Plays audio files and Icecast or Shoutcast streams in one playlist, with a LIVE badge, playback that survives navigation, and a headless hook.",
   "main": "dist/index.js",
   "module": "dist/index.mjs",
   "types": "dist/index.d.ts",
   "exports": {
     ".": {
-      "import": "./dist/index.mjs",
-      "require": "./dist/index.js",
-      "types": "./dist/index.d.ts"
-    },
-    "./styles.css": "./dist/styles.css"
+      "import": {
+        "types": "./dist/index.d.mts",
+        "default": "./dist/index.mjs"
+      },
+      "require": {
+        "types": "./dist/index.d.ts",
+        "default": "./dist/index.js"
+      }
+    }
   },
   "files": [
     "dist",
@@ -22,6 +26,8 @@
     "build": "tsup",
     "dev": "tsup --watch",
     "typecheck": "tsc --noEmit",
+    "test": "vitest run",
+    "prepare": "npm run build",
     "prepublishOnly": "npm run build"
   },
   "keywords": [
@@ -36,7 +42,8 @@
     "live",
     "stream",
     "radio",
-    "hls"
+    "icecast",
+    "shoutcast"
   ],
   "author": "GameOwerMedia",
   "license": "MIT",
@@ -53,11 +60,15 @@
     "react-dom": ">=18.0.0"
   },
   "devDependencies": {
+    "@testing-library/react": "^16.3.3",
+    "@types/node": "^22.20.5",
     "@types/react": "^19.0.0",
     "@types/react-dom": "^19.0.0",
+    "jsdom": "^26.1.0",
     "react": "^19.0.0",
     "react-dom": "^19.0.0",
     "tsup": "^8.0.0",
-    "typescript": "^5.0.0"
+    "typescript": "^5.0.0",
+    "vitest": "^3.2.4"
   }
 }
